@@ -8,7 +8,7 @@ final class ChatWindowController: NSWindowController {
     private weak var bridgeClient: BridgeClient?
     private var cancellables = Set<AnyCancellable>()
 
-    init(state: AppState, bridgeClient: BridgeClient, onTogglePause: @escaping () -> Void) {
+    init(state: AppState, bridgeClient: BridgeClient) {
         self.state = state
         self.bridgeClient = bridgeClient
 
@@ -19,8 +19,7 @@ final class ChatWindowController: NSWindowController {
         let rootView = ChatRootView(
             onSubmit: { [weak bridgeClient] text in
                 bridgeClient?.sendUserQuery(text, source: "chat_input")
-            },
-            onTogglePause: onTogglePause
+            }
         ).environmentObject(state)
         let hostingView = NSHostingView(rootView: rootView)
         panel.contentView = hostingView

@@ -42,15 +42,9 @@ struct UIEvent: Codable {
 
 struct ContextUpdate: Codable {
     let timestamp: String
-    let active_app: String
-    let window_title: String
-    let activity: String
-    let ocr_text: String?
-    let ax_summary: String?
+    let screenshot_png_b64: String?
     let transcript: String?
-    let pixel_hash: String?
-    let change_kind: String
-    let origin: String?
+    let change_kind: String  // "frame" | "transcript_only" | "user-invoked"
 }
 
 // MARK: - Server -> Client
@@ -62,13 +56,7 @@ struct Welcome: Codable {
     let ember_active: Bool?
     let cwd: String?
     let timestamp: String?
-    // Phase 10: runtime prefs from the TUI config.
     let tts_enabled: Bool?
-    let position: String?
-    let excluded_apps: [String]?
-    // Phase A (chat overlay): persistent chat window rendering config.
-    let ui_mode: String?
-    let chat_history_limit: Int?
 }
 
 struct AssistantDelta: Codable {

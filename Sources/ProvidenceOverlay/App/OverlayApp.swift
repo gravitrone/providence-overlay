@@ -11,12 +11,10 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
     private var chatWindowController: ChatWindowController?
     private var captureService: CaptureService?
     private var appState: AppState!
-    private var adaptiveScheduler: AdaptiveScheduler?
     private var frameDedupe: FrameDedupe?
-    private var compressor: ContextCompressor?
+    private var emitter: ScreenshotEmitter?
     private var hotkeyService: HotkeyService?
 
-    // Phase 8
     private var audioService: AudioService?
     private var whisper: WhisperTranscriber?
     private var wakeWord: WakeWordService?
@@ -25,7 +23,6 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
     private var pttWindowTask: Task<Void, Never>?
     private var pttActive = false
 
-    // Phase 10
     private var exclusions: ExclusionsManager?
     private var screenShareDetector: ScreenShareDetector?
 
@@ -54,20 +51,13 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         panel = PanelWindowController(state: appState)
         chatWindowController = ChatWindowController(
             state: appState,
-            bridgeClient: bridgeClient!,
-            onTogglePause: { [weak self] in self?.togglePause() }
+            bridgeClient: bridgeClient!
         )
 
-        // Phase 10: stealth - hide overlay panel from screen capture.
-        // sharingType = .none works for legacy APIs and most screen-share apps;
-        // macOS 15+ ScreenCaptureKit ignores it (documented limitation).
         if let w = panel?.window {
             StealthMode.apply(to: w, enabled: true)
         }
 
-        // Stealth auto-hide: watch for screen-share apps becoming frontmost
-        // and hide both panels while they are. Default ON; user can disable
-        // via the menu bar toggle.
         let detector = ScreenShareDetector()
         detector.setEnabled(appState.screenShareAutoHide)
         screenShareDetector = detector
@@ -86,20 +76,12 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        let scheduler = AdaptiveScheduler(state: appState)
         let dedupe = FrameDedupe()
-        let comp = ContextCompressor(bridge: bridgeClient!)
-        comp.exclusions = exclusions
-        adaptiveScheduler = scheduler
+        let emit = ScreenshotEmitter(bridge: bridgeClient!, state: appState, exclusions: exclusions)
         frameDedupe = dedupe
-        compressor = comp
+        emitter = emit
 
-        captureService = CaptureService(
-            state: appState,
-            scheduler: scheduler,
-            dedupe: dedupe,
-            compressor: comp
-        )
+        captureService = CaptureService(state: appState, dedupe: dedupe, emitter: emit)
 
         hotkeyService = HotkeyService(state: appState, panelController: panel!)
         hotkeyService?.onPushToTalk = { [weak self] in
@@ -110,15 +92,12 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         }
         hotkeyService?.install()
 
-        // Phase 8: audio pipeline
         audioService = AudioService()
         whisper = WhisperTranscriber()
         wakeWord = WakeWordService()
         tts = TTSService(enabled: false)
         wireAudio()
 
-        // Phase 10: route assistant deltas through TTS. TTS only speaks when
-        // armed by armForNextReply (wake_word/push_to_talk). Ambient replies silent.
         bridgeClient?.onAssistantDelta = { [weak self] text, finished in
             self?.tts?.feedDelta(text, finished: finished)
         }
@@ -128,36 +107,85 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
                 self.appState?.ttsEnabled = tts
                 self.tts?.setEnabled(tts)
             }
-            if let apps = w.excluded_apps, !apps.isEmpty {
-                self.exclusions?.setInitial(apps)
-            }
         }
 
-        // Propagate ttsEnabled changes to the TTS service.
         appState.$ttsEnabled
             .sink { [weak self] e in self?.tts?.setEnabled(e) }
             .store(in: &cancellables)
 
+        // Independent toggle sinks: each privacy kill switch fully stops or
+        // restarts its underlying service. Drop-first so we don't double-start
+        // on the initial @Published emission below.
+        appState.$micEnabled
+            .dropFirst()
+            .sink { [weak self] enabled in
+                guard let self = self else { return }
+                Task { await self.applyMic(enabled: enabled) }
+            }
+            .store(in: &cancellables)
+
+        appState.$screenEnabled
+            .dropFirst()
+            .sink { [weak self] enabled in
+                guard let self = self else { return }
+                Task { await self.applyScreen(enabled: enabled) }
+            }
+            .store(in: &cancellables)
+
         bridgeClient?.connect()
 
+        // Boot services only if their toggle is on. First-launch defaults are
+        // both true so this is the typical path; persisted-off is respected.
         let capture = captureService
-        Task { await capture?.start() }
+        if appState.screenEnabled {
+            Task { await capture?.start() }
+        }
 
         let w = whisper
         let audio = audioService
         let wake = wakeWord
+        let micOn = appState.micEnabled
         Task {
             await w?.load()
-            do {
-                try await audio?.start()
-            } catch {
-                Logger.log("audio: start failed: \(error)")
+            if micOn {
+                do {
+                    try await audio?.start()
+                } catch {
+                    Logger.log("audio: start failed: \(error)")
+                }
+                do {
+                    try await wake?.start()
+                } catch {
+                    Logger.log("wake word: start failed: \(error)")
+                }
             }
-            do {
-                try await wake?.start()
-            } catch {
-                Logger.log("wake word: start failed: \(error)")
+        }
+    }
+
+    private func applyMic(enabled: Bool) async {
+        if enabled {
+            do { try await audioService?.start() } catch {
+                Logger.log("mic: start failed: \(error)")
             }
+            do { try await wakeWord?.start() } catch {
+                Logger.log("mic: wake word start failed: \(error)")
+            }
+        } else {
+            audioService?.stop()
+            wakeWord?.stop()
+            whisper?.clear()
+            await MainActor.run {
+                self.appState.transcript = ""
+                self.appState.audioActive = false
+            }
+        }
+    }
+
+    private func applyScreen(enabled: Bool) async {
+        if enabled {
+            await captureService?.start()
+        } else {
+            await captureService?.stop()
         }
     }
 
@@ -169,18 +197,12 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         wake.onDetect = { [weak self] in
             guard let self = self else { return }
             Task { @MainActor in
-                // Phase 10: wake word gated by battery-aware scheduler.
-                guard self.appState?.wakeWordAllowed != false else {
-                    Logger.log("wake: suppressed (battery low)")
-                    return
-                }
                 self.tts?.armForNextReply(source: "wake_word")
                 self.bridgeClient?.sendUserQuery("hey providence listening", source: "wake_word")
-                self.adaptiveScheduler?.beginBurst(duration: 3)
             }
         }
 
-        // Feed raw buffers to wake word (always) and 16k buffers to whisper (meeting mode only).
+        // Always-on transcription when mic is enabled. No more meeting-mode gating.
         Task { [weak self] in
             guard let self = self else { return }
             for await buffer in audio.rawAudioStream() {
@@ -191,14 +213,11 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         Task { [weak self] in
             guard let self = self else { return }
             for await buffer in audio.audioStream() {
-                let shouldFeed = self.appState.meetingMode || self.pttActive
-                if shouldFeed {
-                    await self.whisper?.feed(buffer)
-                }
+                guard self.appState.micEnabled else { continue }
+                await self.whisper?.feed(buffer)
             }
         }
 
-        // AudioService.audioActive -> AppState.audioActive (consumed by ActivityClassifier).
         audio.$audioActive
             .receive(on: DispatchQueue.main)
             .sink { [weak self] active in
@@ -206,7 +225,6 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        // WhisperTranscriber.rollingTranscript -> AppState.transcript
         whisper.$rollingTranscript
             .receive(on: DispatchQueue.main)
             .sink { [weak self] t in
@@ -223,17 +241,6 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] armed in
                 self?.appState?.wakeWordArmed = armed
-            }
-            .store(in: &cancellables)
-
-        // When meeting mode ends, clear the transcript buffer.
-        appState.$meetingMode
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] meeting in
-                if !meeting {
-                    self?.whisper?.clear()
-                }
             }
             .store(in: &cancellables)
     }
@@ -269,29 +276,6 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         if !text.isEmpty {
             tts?.armForNextReply(source: "push_to_talk")
             bridgeClient?.sendUserQuery(text, source: "push_to_talk")
-        }
-    }
-
-    /// Phase F: pause/resume ambient capture. Actually halts audio + screen
-    /// capture services (not just a UI flag). Resume re-starts them.
-    private func togglePause() {
-        if appState.paused {
-            let audio = audioService
-            let capture = captureService
-            Task {
-                do {
-                    try await audio?.start()
-                } catch {
-                    Logger.log("resume: audio start error \(error)")
-                }
-                await capture?.start()
-                await MainActor.run { self.appState.paused = false }
-            }
-        } else {
-            audioService?.stop()
-            let capture = captureService
-            Task { await capture?.stop() }
-            appState.paused = true
         }
     }
 
