@@ -25,4 +25,11 @@ final class AppState: ObservableObject {
     @Published var wakeWordArmed: Bool = false
     @Published var audioActive: Bool = false
     @Published var pttActive: Bool = false
+
+    // Phase 10 additions
+    @Published var wakeWordAllowed: Bool = true   // battery-gated
+    @Published var ttsEnabled: Bool = false
+    @Published var batteryLevel: Double = 1.0
+    @Published var onBattery: Bool = false
+    @Published var panelPosition: String = "right-sidebar"
 }

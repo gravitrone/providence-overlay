@@ -24,6 +24,9 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
     private var pttWindowTask: Task<Void, Never>?
     private var pttActive = false
 
+    // Phase 10
+    private var exclusions: ExclusionsManager?
+
     static func main() {
         let delegate = OverlayApp()
 
@@ -43,13 +46,22 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         appState = AppState()
-        menuBar = MenuBarController(state: appState)
+        exclusions = ExclusionsManager()
+        menuBar = MenuBarController(state: appState, exclusions: exclusions)
         bridgeClient = BridgeClient(socketPath: socketPath, state: appState)
         panel = PanelWindowController(state: appState)
+
+        // Phase 10: stealth - hide overlay panel from screen capture.
+        // sharingType = .none works for legacy APIs and most screen-share apps;
+        // macOS 15+ ScreenCaptureKit ignores it (documented limitation).
+        if let w = panel?.window {
+            StealthMode.apply(to: w, enabled: true)
+        }
 
         let scheduler = AdaptiveScheduler(state: appState)
         let dedupe = FrameDedupe()
         let comp = ContextCompressor(bridge: bridgeClient!)
+        comp.exclusions = exclusions
         adaptiveScheduler = scheduler
         frameDedupe = dedupe
         compressor = comp
@@ -73,6 +85,27 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         wakeWord = WakeWordService()
         tts = TTSService(enabled: false)
         wireAudio()
+
+        // Phase 10: route assistant deltas through TTS. TTS only speaks when
+        // armed by armForNextReply (wake_word/push_to_talk). Ambient replies silent.
+        bridgeClient?.onAssistantDelta = { [weak self] text, finished in
+            self?.tts?.feedDelta(text, finished: finished)
+        }
+        bridgeClient?.onWelcome = { [weak self] w in
+            guard let self = self else { return }
+            if let tts = w.tts_enabled {
+                self.appState?.ttsEnabled = tts
+                self.tts?.setEnabled(tts)
+            }
+            if let apps = w.excluded_apps, !apps.isEmpty {
+                self.exclusions?.setInitial(apps)
+            }
+        }
+
+        // Propagate ttsEnabled changes to the TTS service.
+        appState.$ttsEnabled
+            .sink { [weak self] e in self?.tts?.setEnabled(e) }
+            .store(in: &cancellables)
 
         bridgeClient?.connect()
 
@@ -105,6 +138,12 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         wake.onDetect = { [weak self] in
             guard let self = self else { return }
             Task { @MainActor in
+                // Phase 10: wake word gated by battery-aware scheduler.
+                guard self.appState?.wakeWordAllowed != false else {
+                    Logger.log("wake: suppressed (battery low)")
+                    return
+                }
+                self.tts?.armForNextReply(source: "wake_word")
                 self.bridgeClient?.sendUserQuery("hey providence listening", source: "wake_word")
                 self.adaptiveScheduler?.beginBurst(duration: 3)
             }
@@ -197,6 +236,7 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         let text = whisper?.rollingTranscript ?? ""
         Logger.log("ptt: window closed, text=\(text.prefix(80))")
         if !text.isEmpty {
+            tts?.armForNextReply(source: "push_to_talk")
             bridgeClient?.sendUserQuery(text, source: "push_to_talk")
         }
     }

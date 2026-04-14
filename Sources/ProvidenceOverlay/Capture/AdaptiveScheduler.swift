@@ -20,6 +20,10 @@ final class AdaptiveScheduler: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var idleTimer: Timer?
 
+    // Phase 10: battery-aware downgrade. Hysteresis: downgrade at <20%,
+    // restore only once charging or level >= 25%.
+    private var batteryForcedIdle: Bool = false
+
     init(state: AppState) {
         self.state = state
         wireAppSwitchObservers()
@@ -84,11 +88,39 @@ final class AdaptiveScheduler: ObservableObject {
 
     @MainActor
     private func evaluate() {
+        checkBatteryAndMaybeDowngrade()
+        if batteryForcedIdle {
+            if mode != .idle { transitionTo(.idle) }
+            return
+        }
         if mode == .burst && Date() > burstUntil {
             transitionTo(activityMode())
             return
         }
         transitionTo(activityMode())
+    }
+
+    /// Phase 10: force idle mode + disable wake word when on battery < 20%.
+    /// Restore when charging or level climbs to 25% (hysteresis prevents flapping).
+    private func checkBatteryAndMaybeDowngrade() {
+        let status = BatteryMonitor.current()
+        state.batteryLevel = status.level
+        state.onBattery = status.onBattery
+
+        if batteryForcedIdle {
+            // Restore only once off battery or level >= 25%.
+            if !status.onBattery || status.level >= 0.25 {
+                batteryForcedIdle = false
+                state.wakeWordAllowed = true
+                Logger.log("scheduler: battery restored (onBattery=\(status.onBattery) level=\(status.level))")
+            }
+        } else {
+            if status.onBattery && status.level < 0.20 {
+                batteryForcedIdle = true
+                state.wakeWordAllowed = false
+                Logger.log("scheduler: battery low (\(Int(status.level * 100))%) - forcing idle, wake word off")
+            }
+        }
     }
 }
 

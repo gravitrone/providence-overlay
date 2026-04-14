@@ -10,13 +10,8 @@ final class PanelWindowController: NSWindowController {
     init(state: AppState) {
         self.state = state
 
-        // Default: right-sidebar, 300 wide
         let screen = NSScreen.main ?? NSScreen.screens.first!
-        let w: CGFloat = 300
-        let h: CGFloat = screen.frame.height - 40
-        let x: CGFloat = screen.frame.maxX - w - 10
-        let y: CGFloat = screen.frame.minY + 20
-        let rect = NSRect(x: x, y: y, width: w, height: h)
+        let rect = Self.computeInitialFrame(screen: screen, position: state.panelPosition)
         let panel = SuggestionPanel(contentRect: rect)
 
         let hostingView = NSHostingView(rootView: PanelRootView().environmentObject(state))
@@ -36,6 +31,35 @@ final class PanelWindowController: NSWindowController {
                 }
             }
             .store(in: &cancellables)
+
+        // Phase 10: react to runtime position changes from Welcome.
+        state.$panelPosition
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] pos in
+                guard let self = self, let window = self.window else { return }
+                let s = window.screen ?? NSScreen.main ?? NSScreen.screens.first!
+                let newFrame = Self.computeInitialFrame(screen: s, position: pos)
+                window.setFrame(newFrame, display: true, animate: true)
+            }
+            .store(in: &cancellables)
+    }
+
+    static func computeInitialFrame(screen: NSScreen, position: String) -> NSRect {
+        switch position {
+        case "bottom-bar":
+            let w = screen.frame.width - 40
+            let h: CGFloat = 150
+            let x = screen.frame.minX + 20
+            let y = screen.frame.minY + 20
+            return NSRect(x: x, y: y, width: w, height: h)
+        default:
+            let w: CGFloat = 300
+            let h = screen.frame.height - 40
+            let x = screen.frame.maxX - w - 10
+            let y = screen.frame.minY + 20
+            return NSRect(x: x, y: y, width: w, height: h)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }

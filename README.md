@@ -101,6 +101,67 @@ Deferred (phase 8):
 - Porcupine wake-word model
 - Runtime menu-bar toggles (TTS on/off, wake-word disable)
 
+## Phase 10
+
+Final polish - runtime privacy, stealth, battery-aware capture, TTS routing.
+
+### TTS routing
+
+`TTSService` now speaks assistant replies only when the preceding user turn
+came from `wake_word` or `push_to_talk`. Panel-typed queries and ambient
+`context_update` replies stay silent. Enable via `[overlay] tts_enabled = true`
+in `~/.providence/config.toml`.
+
+### Stealth mode
+
+The overlay panel sets `NSWindow.sharingType = .none` at launch, which hides
+it from legacy screen-capture APIs (`CGDisplayCreateImage`, `screencapture` CLI)
+and from all major screen-sharing tools (Zoom, Google Meet, Microsoft Teams,
+Chime - all still use the legacy capture path as of 2026).
+
+**Caveat:** Apple broke `sharingType = .none` for `ScreenCaptureKit` starting
+in macOS 15. Apps using `SCStream` (including this overlay's own
+`CaptureService`) see the panel regardless. There is no public workaround.
+If you need true stealth on macOS 15+, don't share the display.
+
+### Battery-aware capture
+
+`AdaptiveScheduler` polls `BatteryMonitor` every second. When the machine is
+on battery and level < 20 %, mode is forced to `.idle` (0.2 fps) and the
+wake-word trigger is gated off. Restored when charging or level >= 25 %
+(hysteresis prevents flapping at the threshold).
+
+### Privacy exclusions
+
+Menu-bar > *Privacy Exclusions* toggles a small set of common sensitive
+apps (1Password, Keychain Access, Signal, Slack, Arc). `ContextCompressor`
+drops any frame whose frontmost app's bundle ID is in the list. Persisted
+to `~/.providence/overlay/exclusions.json` (best-effort; missing/corrupt
+files tolerated). The TUI can preload the list via `overlay.exclude_apps`
+in `config.toml`, which arrives in the `Welcome` envelope.
+
+### Menu bar recording indicator
+
+A pulsing flame animates the status item whenever `audioActive` or
+`meetingMode` is on. The pulse uses a 0.6 s timer and flips `alphaValue` -
+measured < 1 % CPU. **Never suppressed.** Privacy requirement: when we're
+recording, you see it.
+
+### Welcome protocol extensions
+
+`Welcome` now carries optional `tts_enabled`, `position`, and
+`excluded_apps` so TUI config drives overlay behaviour at runtime.
+`PanelWindowController` animates to the new frame when `position` changes
+between `right-sidebar` (default) and `bottom-bar`.
+
+### Simplifications taken
+
+- `ExclusionsManager` is in-memory + JSON; no iCloud sync or encryption.
+- Menu-bar pulse uses `alphaValue` toggle, not a smooth spring animation.
+- Exclusions submenu is a static list of five apps; no "add custom bundle ID"
+  dialog (add via config or the JSON file for now).
+- Wake-word suppression on low battery is silent - no user-facing toast.
+
 ## Directory layout
 
 ```
@@ -108,10 +169,12 @@ Sources/
   ProvidenceOverlay/        # executable target
     App/                    # NSApplicationDelegate, menu bar, shared state, HotkeyService
     AI/                     # ContextCompressor
+    Audio/                  # mic pipeline, WhisperKit, wake word, TTS
     Bridge/                 # UDS client, JSONL framing, envelope codecs
     Capture/                # SCStream + AdaptiveScheduler + FrameDedupe + AXReader
+    Privacy/                # StealthMode, ExclusionsManager (phase 10)
     UI/                     # SuggestionPanel + SwiftUI views (indicator, stream, footer)
-    Util/                   # Logger
+    Util/                   # Logger + BatteryMonitor
   ProvidenceOverlayCore/    # pure-logic library (ActivityClassifier lives here)
 Tests/
   ProvidenceOverlayCoreTests/

@@ -62,6 +62,10 @@ struct Welcome: Codable {
     let ember_active: Bool?
     let cwd: String?
     let timestamp: String?
+    // Phase 10: runtime prefs from the TUI config.
+    let tts_enabled: Bool?
+    let position: String?
+    let excluded_apps: [String]?
 }
 
 struct AssistantDelta: Codable {

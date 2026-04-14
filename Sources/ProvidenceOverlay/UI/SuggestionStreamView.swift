@@ -27,7 +27,7 @@ struct SuggestionStreamView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: state.latestAssistantText)
+        .animation(.easeInOut(duration: 0.25), value: state.latestAssistantText)
     }
 
     private func dismiss() {

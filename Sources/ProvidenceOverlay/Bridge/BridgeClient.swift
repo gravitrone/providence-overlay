@@ -16,6 +16,10 @@ final class BridgeClient {
     private var reconnectAttempt = 0
     private var cancelled = false
 
+    /// Phase 10: hook for TTS + welcome handling. Set by OverlayApp after construction.
+    var onAssistantDelta: ((String, Bool) -> Void)?
+    var onWelcome: ((Welcome) -> Void)?
+
     init(socketPath: String, state: AppState) {
         self.socketPath = socketPath
         self.state = state
@@ -133,7 +137,10 @@ final class BridgeClient {
                 state.engine = w.engine ?? ""
                 state.model = w.model ?? ""
                 state.emberActive = w.ember_active ?? false
-                Logger.log("bridge: welcome session=\(state.sessionID) engine=\(state.engine)")
+                if let tts = w.tts_enabled { state.ttsEnabled = tts }
+                if let pos = w.position, !pos.isEmpty { state.panelPosition = pos }
+                Logger.log("bridge: welcome session=\(state.sessionID) engine=\(state.engine) tts=\(state.ttsEnabled) pos=\(state.panelPosition)")
+                onWelcome?(w)
             }
         case MessageType.assistantDelta:
             if let d = try? env.data?.decode(AssistantDelta.self) {
@@ -142,6 +149,7 @@ final class BridgeClient {
                 } else {
                     state.latestAssistantText += d.text
                 }
+                onAssistantDelta?(d.text, d.finished ?? false)
             }
         case MessageType.emberState:
             if let s = try? env.data?.decode(EmberState.self) {

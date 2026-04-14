@@ -17,6 +17,10 @@ final class ContextCompressor {
     /// what to do with each update.
     var contextInjectionMode: String = "system_reminder"
 
+    /// Phase 10: runtime-mutable bundle ID exclusion list.
+    /// Nil disables the extra check (still applies the hardcoded loopback set).
+    var exclusions: ExclusionsManager?
+
     init(bridge: BridgeClient) {
         self.bridge = bridge
     }
@@ -34,6 +38,11 @@ final class ContextCompressor {
            b == "com.gravitrone.providence.overlay" ||
             b == "com.apple.Terminal" ||
             b == "com.googlecode.iterm2" {
+            return
+        }
+
+        // Phase 10: runtime privacy exclusions (1Password, Keychain, etc).
+        if let b = axSnapshot.bundleID, exclusions?.contains(b) == true {
             return
         }
 
