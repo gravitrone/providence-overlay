@@ -24,8 +24,8 @@ This file is the canonical project rules for BOTH Claude Code and OpenAI Codex C
 
 ## Stack Decisions (Locked)
 
-- Swift 5.9+, targeting macOS 14.2+ (Core Audio taps, on-device SFSpeechRecognizer)
-- WhisperKit (SPM) for local Neural Engine transcription (tiny.en model)
+- Swift 6.2+, targeting macOS 15.4+ (mlx-swift-audio requirement)
+- mlx-swift-audio (SPM, via alxxpersonal fork) for local MLX Whisper inference (large-v3-turbo, fp16)
 - NSPanel + SwiftUI via NSHostingView - no standalone NSWindow
 - NSVisualEffectView `.hudWindow` material for vibrancy blur
 - Ad-hoc codesign for dev; `.app` bundle at `~/Applications/Providence Overlay.app` for stable TCC identity

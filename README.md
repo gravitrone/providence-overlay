@@ -46,7 +46,7 @@ Most AI assistants are stateless between turns. You screenshot, paste, explain, 
 
 - **Two rendering modes** - Ghost panel fades in on suggestions and auto-hides. Chat panel stays persistent with scrollable history and a text input. Toggle between them via config or the menu bar.
 - **ScreenCaptureKit pipeline** - Adaptive frame rate (0.2 fps idle, 1 fps active, 2 fps in meetings, 5 fps burst). dHash deduplication skips identical frames.
-- **Local transcription** - WhisperKit tiny.en runs on the Neural Engine. "Hey Providence" wake word via on-device SFSpeechRecognizer. Cmd+Option+Space for push-to-talk.
+- **Local transcription** - mlx-swift-audio runs whisper-large-v3-turbo (fp16) via MLX on Apple Silicon. "Hey Providence" wake word via on-device SFSpeechRecognizer. Cmd+Option+Space for push-to-talk.
 - **Accessibility-first context** - Reads the focused window's AX tree for structured text instead of relying on OCR. Falls back to Vision framework for apps without AX support.
 - **Stealth by default** - `sharingType = .none` on all panels and an auto-hide heuristic when Zoom, Teams, Meet, Chime, or FaceTime is frontmost.
 - **Bounded cost** - Jaccard-similarity transcript gating, 5-second heartbeat minimum, per-day token budget with automatic shutoff.
@@ -91,10 +91,12 @@ make install   # copy bundle to ~/Applications + shim at ~/.providence/bin
 make clean     # remove .build and build/
 ```
 
-Targets macOS 14.2+. Tests require `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` when run outside Xcode. WhisperKit downloads the tiny.en model on first launch (~80 MB).
+Targets macOS 15.4+ (Swift 6.2 toolchain, mlx-swift-audio requirement). Tests require `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` when run outside Xcode. mlx-swift-audio loads the whisper-large-v3-turbo model (~1.5 GB fp16) from the HuggingFace cache at `~/.cache/huggingface/hub/` on first launch, downloading if not cached.
 
 ## Known Limitations
 
+- Requires macOS 15.4+ due to the mlx-swift-audio toolchain.
+- First launch pulls ~1.5 GB of model weights into `~/.cache/huggingface/hub/` if the cache is empty.
 - System audio tap is stubbed. Microphone-only transcription in meetings for now.
 - Wake word uses SFSpeechRecognizer instead of Porcupine. English-only, on-device.
 - Chat history is in-memory. SQLite persistence is planned.
