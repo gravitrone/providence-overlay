@@ -47,6 +47,10 @@ final class AppState: ObservableObject {
     @Published var lastContextReason: String = ""    // "pattern"|"error"|"heartbeat"|"user-invoked"
     @Published var paused: Bool = false
 
+    // Stealth auto-hide: detect frontmost screen-share apps and hide panels.
+    @Published var screenShareAutoHide: Bool = true    // user toggle
+    @Published var hiddenDueToShare: Bool = false      // current auto-hide state
+
     /// Append a committed message to history, trimming oldest when past the limit.
     func addChatMessage(role: ChatMessage.Role, text: String) {
         guard !text.isEmpty else { return }

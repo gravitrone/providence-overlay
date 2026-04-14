@@ -34,10 +34,16 @@ final class PanelWindowController: NSWindowController {
 
         // Phase C (chat overlay): hide the ghost suggestion panel when uiMode=="chat"
         // (chat-only). Show in "ghost" or "both".
-        state.$uiMode
-            .removeDuplicates()
-            .sink { [weak self] mode in
+        // Stealth auto-hide layered on top: hide whenever a known screen-share
+        // app is frontmost, regardless of uiMode.
+        Publishers.CombineLatest(state.$uiMode, state.$hiddenDueToShare)
+            .removeDuplicates(by: { $0 == $1 })
+            .sink { [weak self] (mode, hidden) in
                 guard let panel = self?.window else { return }
+                if hidden {
+                    panel.orderOut(nil)
+                    return
+                }
                 switch mode {
                 case "chat":
                     panel.orderOut(nil)
