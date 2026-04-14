@@ -66,6 +66,9 @@ struct Welcome: Codable {
     let tts_enabled: Bool?
     let position: String?
     let excluded_apps: [String]?
+    // Phase A (chat overlay): persistent chat window rendering config.
+    let ui_mode: String?
+    let chat_history_limit: Int?
 }
 
 struct AssistantDelta: Codable {
