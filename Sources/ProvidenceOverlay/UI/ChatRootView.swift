@@ -4,13 +4,14 @@ import ProvidenceOverlayCore
 struct ChatRootView: View {
     @EnvironmentObject var state: AppState
     let onSubmit: (String) -> Void
+    let onTogglePause: () -> Void
 
     @State private var inputText: String = ""
     @FocusState private var inputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            statusBar
+            ChatStatusView(onTogglePause: onTogglePause)
             Divider().background(Color.white.opacity(0.1))
             messagesList
             Divider().background(Color.white.opacity(0.1))
@@ -29,29 +30,6 @@ struct ChatRootView: View {
         onSubmit(trimmed)
         // Safety clear in case the child's clear races.
         inputText = ""
-    }
-
-    private var statusBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 10))
-                .foregroundColor(Color(red: 1.0, green: 0.65, blue: 0.20).opacity(0.8))
-            Text("Providence")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(0.5)
-                .foregroundColor(.white.opacity(0.7))
-            Spacer()
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(state.audioActive ? Color.green : Color.white.opacity(0.25))
-                    .frame(width: 7, height: 7)
-                Text(state.audioActive ? "Listening" : "Idle")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.55))
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
     }
 
     private var messagesList: some View {

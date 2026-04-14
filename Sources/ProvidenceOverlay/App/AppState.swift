@@ -42,6 +42,11 @@ final class AppState: ObservableObject {
     // Phase B (chat overlay): persistent conversation history.
     @Published var chatMessages: [ChatMessage] = []
 
+    // Phase F (chat overlay): context_ack capture + pause state.
+    @Published var sessionTokens: Int = 0
+    @Published var lastContextReason: String = ""    // "pattern"|"error"|"heartbeat"|"user-invoked"
+    @Published var paused: Bool = false
+
     /// Append a committed message to history, trimming oldest when past the limit.
     func addChatMessage(role: ChatMessage.Role, text: String) {
         guard !text.isEmpty else { return }

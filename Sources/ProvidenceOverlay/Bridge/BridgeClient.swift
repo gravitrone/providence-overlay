@@ -158,8 +158,15 @@ final class BridgeClient {
             // Phase 6: log only.
             Logger.log("bridge: session_event \(env.id ?? "")")
         case MessageType.contextAck:
-            // Phase 6: log only.
-            break
+            // Phase F: capture session token total + reason for the status bar.
+            if let a = try? env.data?.decode(ContextAck.self) {
+                if let total = a.total_session_tokens {
+                    state.sessionTokens = total
+                }
+                if let reason = a.reason {
+                    state.lastContextReason = reason
+                }
+            }
         case MessageType.bye:
             Logger.log("bridge: received bye, disconnecting")
             closeSocket()
