@@ -9,11 +9,14 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
     private var panel: PanelWindowController?
     private var captureService: CaptureService?
     private var appState: AppState!
+    private var adaptiveScheduler: AdaptiveScheduler?
+    private var frameDedupe: FrameDedupe?
+    private var compressor: ContextCompressor?
+    private var hotkeyService: HotkeyService?
 
     static func main() {
         let delegate = OverlayApp()
 
-        // Parse --socket=<path> arg
         var socketPath = "\(NSHomeDirectory())/.providence/run/overlay.sock"
         for arg in CommandLine.arguments {
             if arg.hasPrefix("--socket=") {
@@ -24,24 +27,37 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
 
         let app = NSApplication.shared
         app.delegate = delegate
-        app.setActivationPolicy(.accessory)  // reinforce LSUIElement at runtime
+        app.setActivationPolicy(.accessory)
         app.run()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         appState = AppState()
         menuBar = MenuBarController(state: appState)
-
         bridgeClient = BridgeClient(socketPath: socketPath, state: appState)
         panel = PanelWindowController(state: appState)
-        captureService = CaptureService(state: appState)
 
-        // Connect
+        let scheduler = AdaptiveScheduler(state: appState)
+        let dedupe = FrameDedupe()
+        let comp = ContextCompressor(bridge: bridgeClient!)
+        adaptiveScheduler = scheduler
+        frameDedupe = dedupe
+        compressor = comp
+
+        captureService = CaptureService(
+            state: appState,
+            scheduler: scheduler,
+            dedupe: dedupe,
+            compressor: comp
+        )
+
+        hotkeyService = HotkeyService(state: appState, panelController: panel!)
+        hotkeyService?.install()
+
         bridgeClient?.connect()
 
-        // Start capture at 1 fps (Phase 6 baseline)
         let capture = captureService
-        Task { await capture?.start(fps: 1) }
+        Task { await capture?.start() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

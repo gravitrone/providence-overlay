@@ -50,6 +50,7 @@ struct ContextUpdate: Codable {
     let transcript: String?
     let pixel_hash: String?
     let change_kind: String
+    let origin: String?
 }
 
 // MARK: - Server -> Client

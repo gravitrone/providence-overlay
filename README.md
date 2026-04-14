@@ -57,13 +57,24 @@ Server to client:
 
 Scaffold + UDS client + basic 1 fps `SCStream` (drops frames) + empty fade-in panel.
 
+## Phase 7 scope
+
+Ambient capture pipeline:
+
+- `AdaptiveScheduler` - 0.2 / 1 / 2 / 5 fps modes (idle / active / meeting / burst) driven by `NSWorkspace.didActivateApplicationNotification`
+- `FrameDedupe` - 64-bit dHash (9x8 grayscale via vImage), skip frames with < 3 bits changed
+- `AXReader.snapshot()` - frontmost-app focused-window title + focus value, ~500 char summary, non-crashing when AX perm missing
+- `ActivityClassifier` (in `ProvidenceOverlayCore`) - rule-based: coding / browsing / meeting / writing / idle / general
+- `ContextCompressor` - gates `context_update` emission on (activity change | app change | error signal | 30s+ elapsed and hamming >= 8 | user-invoked). Loopback suppression for Providence TUI and overlay.
+- Panel chrome: `ContextIndicatorView`, `SuggestionStreamView` with dismiss, `StatusFooterView`, 30s auto-fade
+- `HotkeyService` - Cmd+Shift+P toggles panel `ignoresMouseEvents` with a 1px orange border accent when interactive
+
+`ContextUpdate` gained an `origin` field (`"overlay"`).
+
 Deferred:
 
-- AX tree reads
 - Audio capture + wake phrase
-- Perceptual hashing + activity classifier
-- Adaptive FPS / idle downshift
-- Wake-word + push-to-talk input paths
+- OCR pipeline
 - Plugin tab contributions
 
 ## Directory layout
@@ -71,12 +82,13 @@ Deferred:
 ```
 Sources/
   ProvidenceOverlay/        # executable target
-    App/                    # NSApplicationDelegate, menu bar, shared state
+    App/                    # NSApplicationDelegate, menu bar, shared state, HotkeyService
+    AI/                     # ContextCompressor
     Bridge/                 # UDS client, JSONL framing, envelope codecs
-    Capture/                # ScreenCaptureKit wrapper (1 fps baseline)
-    UI/                     # SuggestionPanel + SwiftUI root
+    Capture/                # SCStream + AdaptiveScheduler + FrameDedupe + AXReader
+    UI/                     # SuggestionPanel + SwiftUI views (indicator, stream, footer)
     Util/                   # Logger
-  ProvidenceOverlayCore/    # pure-logic library target (Phase 7+ will populate)
+  ProvidenceOverlayCore/    # pure-logic library (ActivityClassifier lives here)
 Tests/
   ProvidenceOverlayCoreTests/
 ```

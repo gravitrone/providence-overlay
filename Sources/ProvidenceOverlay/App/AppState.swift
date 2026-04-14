@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import ProvidenceOverlayCore
 
 @MainActor
 final class AppState: ObservableObject {
@@ -10,4 +11,10 @@ final class AppState: ObservableObject {
     @Published var engine: String = ""
     @Published var model: String = ""
     @Published var emberActive: Bool = false
+
+    // Phase 7 additions
+    @Published var currentActivity: Activity = .idle
+    @Published var currentApp: String = ""
+    @Published var currentFPS: Double = 0.2
+    @Published var panelInteractive: Bool = false
 }

@@ -19,14 +19,15 @@ final class PanelWindowController: NSWindowController {
         let rect = NSRect(x: x, y: y, width: w, height: h)
         let panel = SuggestionPanel(contentRect: rect)
 
-        // SwiftUI content
         let hostingView = NSHostingView(rootView: PanelRootView().environmentObject(state))
         panel.contentView = hostingView
-        panel.alphaValue = 0  // invisible until we have something to show
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = 12
+        panel.alphaValue = 0  // invisible until something to show
 
         super.init(window: panel)
 
-        // Fade in when assistant text appears
+        // Fade in on assistant deltas
         state.$latestAssistantText
             .dropFirst()
             .sink { [weak self] text in
@@ -35,25 +36,47 @@ final class PanelWindowController: NSWindowController {
                 }
             }
             .store(in: &cancellables)
-
-        panel.orderFront(nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 
-    private func fadeIn() {
+    func fadeIn() {
+        guard let window = window else { return }
+        window.orderFront(nil)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.2
-            window?.animator().alphaValue = 0.9
+            window.animator().alphaValue = 0.9
         }
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(fadeOut), object: nil)
         perform(#selector(fadeOut), with: nil, afterDelay: 30)
     }
 
     @objc private func fadeOut() {
+        guard let window = window else { return }
+        // Don't auto-fade while panel is interactive (Cmd+Shift+P engaged).
+        if let panel = window as? SuggestionPanel, !panel.ignoresMouseEvents { return }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.3
-            window?.animator().alphaValue = 0
+            window.animator().alphaValue = 0
         }
+    }
+
+    /// Toggle panel interactivity via Cmd+Shift+P hotkey.
+    func toggleClickThrough() {
+        guard let panel = window as? SuggestionPanel else { return }
+        panel.ignoresMouseEvents.toggle()
+        state.panelInteractive = !panel.ignoresMouseEvents
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = 12
+        if panel.ignoresMouseEvents {
+            panel.contentView?.layer?.borderWidth = 0
+        } else {
+            panel.contentView?.layer?.borderColor = NSColor.systemOrange.cgColor
+            panel.contentView?.layer?.borderWidth = 1
+            panel.orderFront(nil)
+            panel.animator().alphaValue = 0.9
+            NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(fadeOut), object: nil)
+        }
+        Logger.log("panel: clickThrough=\(panel.ignoresMouseEvents)")
     }
 }

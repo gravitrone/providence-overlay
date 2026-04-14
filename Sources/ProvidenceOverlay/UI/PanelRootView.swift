@@ -4,17 +4,13 @@ struct PanelRootView: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !state.latestAssistantText.isEmpty {
-                Text(state.latestAssistantText)
-                    .foregroundColor(.white)
-                    .font(.system(size: 13))
-                    .padding()
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(12)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            ContextIndicatorView()
+            SuggestionStreamView()
             Spacer()
+            StatusFooterView()
         }
-        .padding()
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
