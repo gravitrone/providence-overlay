@@ -1,6 +1,28 @@
+# Swift Package Manager
 .build/
+Package.resolved.lock
 *.xcodeproj/
+*.xcworkspace/
 .swiftpm/
-*.o
-*.pdb
+
+# Build artifacts (Makefile app bundle)
+build/
+*.dSYM
+*.app
+
+# macOS
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Secrets
+.env
+.env.local
+*.pem
