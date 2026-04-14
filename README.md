@@ -10,13 +10,30 @@ Ambient AI overlay companion to the Providence Core TUI. Runs as a macOS menu ba
 - Accessibility permission (for future AX tree reads, Phase 7+)
 - Microphone permission (for future wake-phrase + meeting audio, Phase 7+)
 
-## Build
+## Build & Install
 
 ```
-make build      # release build + ad-hoc codesign with entitlements
-make install    # copy binary into ~/.providence/bin/
+make install
+```
+
+This wraps the binary in a proper `.app` bundle at `~/Applications/Providence Overlay.app` and installs a shim at `~/.providence/bin/providence-overlay` that execs the .app's binary. TCC identifies the app by its bundle ID (`com.gravitrone.providence.overlay`).
+
+After install, macOS will prompt for Screen Recording + Accessibility permissions on first use. To reset permission decisions:
+
+```
+tccutil reset ScreenCapture com.gravitrone.providence.overlay
+tccutil reset Accessibility com.gravitrone.providence.overlay
+```
+
+The binary the TUI spawns (`providence-overlay`) is the shim - but TCC sees the underlying .app bundle.
+
+Other targets:
+
+```
+make build      # swift release build only (no bundle)
+make app        # build + wrap into build/Providence Overlay.app
 make test       # run ProvidenceOverlayCore unit tests
-make clean      # nuke .build/
+make clean      # nuke .build/ and build/
 ```
 
 ## Launch
