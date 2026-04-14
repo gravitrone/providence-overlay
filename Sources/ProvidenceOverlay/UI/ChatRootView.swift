@@ -10,16 +10,21 @@ struct ChatRootView: View {
     @FocusState private var inputFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            ChatStatusView(onTogglePause: onTogglePause)
-            Divider().background(Color.white.opacity(0.1))
-            messagesList
-            Divider().background(Color.white.opacity(0.1))
-            ChatInputView(text: $inputText, focused: $inputFocused, onSubmit: handleSubmit)
-        }
-        .background(
+        ZStack {
+            // Solid opaque backdrop - the VisualEffectBackground alone gave
+            // WindowServer almost nothing to composite, leaving CGS alpha
+            // near zero and the panel invisible even with alphaValue = 1.
+            Color(red: 0.08, green: 0.06, blue: 0.04).opacity(0.92)
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
-        )
+                .opacity(0.55)
+            VStack(spacing: 0) {
+                ChatStatusView(onTogglePause: onTogglePause)
+                Divider().background(Color.white.opacity(0.1))
+                messagesList
+                Divider().background(Color.white.opacity(0.1))
+                ChatInputView(text: $inputText, focused: $inputFocused, onSubmit: handleSubmit)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear { inputFocused = true }
     }

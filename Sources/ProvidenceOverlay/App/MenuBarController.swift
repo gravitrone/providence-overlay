@@ -28,7 +28,14 @@ final class MenuBarController {
         self.state = state
         self.exclusions = exclusions
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "\u{1F525}"  // flame
+        if let btn = statusItem.button {
+            if let img = NSImage(systemSymbolName: "flame.fill", accessibilityDescription: "Providence Overlay") {
+                img.isTemplate = true
+                btn.image = img
+            } else {
+                btn.title = "P"
+            }
+        }
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Providence Overlay", action: nil, keyEquivalent: ""))

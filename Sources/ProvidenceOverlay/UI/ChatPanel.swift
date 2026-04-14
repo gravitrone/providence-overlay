@@ -4,33 +4,19 @@ final class ChatPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
-            styleMask: [.nonactivatingPanel, .titled, .resizable, .closable, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
         )
-        // Transparent window chrome so SwiftUI's rounded + blurred background shows through.
         isOpaque = false
         backgroundColor = .clear
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        isMovableByWindowBackground = true
         hasShadow = true
         level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         isFloatingPanel = true
         hidesOnDeactivate = false
-        // Stealth hint - ignored by macOS 15+ ScreenCaptureKit but still hides
-        // from legacy screen-share APIs (Teams/Meet/Chime).
-        sharingType = .none
-        // Sensible minimum + maximum.
-        minSize = NSSize(width: 280, height: 220)
-        maxSize = NSSize(width: 800, height: 1400)
-        // Remember user drag position across launches.
-        setFrameAutosaveName("ProvidenceChatPanel")
     }
 
-    // A chat panel accepts keyboard focus so the text input works.
-    override var canBecomeKey: Bool { true }
-    // But not main (doesn't claim menubar/app status).
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
