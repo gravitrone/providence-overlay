@@ -20,108 +20,81 @@ struct ChatRootView: View {
 
     private var statusBar: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(state.audioActive ? Color.green : Color.gray)
-                .frame(width: 8, height: 8)
-            Text(state.audioActive ? "Listening" : "Idle")
-                .font(.system(size: 11))
+            Image(systemName: "flame.fill")
+                .font(.system(size: 10))
+                .foregroundColor(Color(red: 1.0, green: 0.65, blue: 0.20).opacity(0.8))
+            Text("Providence")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .tracking(0.5)
                 .foregroundColor(.white.opacity(0.7))
             Spacer()
-            Text("Providence")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(state.audioActive ? Color.green : Color.white.opacity(0.25))
+                    .frame(width: 7, height: 7)
+                Text(state.audioActive ? "Listening" : "Idle")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.55))
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private var messagesList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     if state.chatMessages.isEmpty && state.latestAssistantText.isEmpty {
                         emptyState
                     } else {
                         ForEach(state.chatMessages) { msg in
-                            placeholderBubble(for: msg)
+                            ChatBubbleView(message: msg)
                                 .id(msg.id)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.animation(.easeIn(duration: 0.12)),
+                                    removal: .identity))
                         }
-                        // Live-streaming assistant bubble (Phase D renders this properly).
                         if !state.latestAssistantText.isEmpty {
-                            streamingBubble
+                            StreamingBubbleView(text: state.latestAssistantText)
                                 .id("streaming")
                         }
                     }
                 }
-                .padding(12)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 12)
             }
-            .onChange(of: state.chatMessages) { _, _ in
-                if let last = state.chatMessages.last {
-                    withAnimation(.none) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+            .onChange(of: state.chatMessages.count) { _, _ in
+                scrollToBottom(proxy: proxy)
             }
             .onChange(of: state.latestAssistantText) { _, _ in
-                proxy.scrollTo("streaming", anchor: .bottom)
+                if !state.latestAssistantText.isEmpty {
+                    proxy.scrollTo("streaming", anchor: .bottom)
+                }
             }
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let last = state.chatMessages.last {
+            proxy.scrollTo(last.id, anchor: .bottom)
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
-            Text("Providence is listening.")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.4))
+        VStack(spacing: 8) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 20))
+                .foregroundColor(Color(red: 1.0, green: 0.65, blue: 0.20).opacity(0.25))
+            Text("The Profaned Core listens.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
             Text("Speak, type, or wait for context.")
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(.white.opacity(0.3))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 40)
-    }
-
-    private func placeholderBubble(for msg: ChatMessage) -> some View {
-        HStack {
-            if msg.role == .user { Spacer(minLength: 40) }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(msg.role == .user ? "You" : "Providence")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
-                Text(msg.text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(msg.role == .user ? 0.95 : 0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-            )
-            if msg.role == .assistant { Spacer(minLength: 40) }
-        }
-    }
-
-    private var streamingBubble: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Providence")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
-                Text(state.latestAssistantText)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.orange.opacity(0.08))
-            )
-            Spacer(minLength: 40)
-        }
+        .padding(.top, 60)
     }
 
     private var inputStub: some View {
