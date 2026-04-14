@@ -21,7 +21,7 @@ final class ChatWindowController: NSWindowController {
                 bridgeClient?.sendUserQuery(text, source: "chat_input")
             }
         ).environmentObject(state)
-        let hostingView = NSHostingView(rootView: rootView)
+        let hostingView = ChatHostingView(rootView: rootView)
         panel.contentView = hostingView
         panel.contentView?.wantsLayer = true
         panel.contentView?.layer?.cornerRadius = 12
