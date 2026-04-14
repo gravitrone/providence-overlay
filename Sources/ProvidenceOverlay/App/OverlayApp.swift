@@ -27,6 +27,7 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
 
     // Phase 10
     private var exclusions: ExclusionsManager?
+    private var screenShareDetector: ScreenShareDetector?
 
     static func main() {
         let delegate = OverlayApp()
@@ -63,6 +64,27 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         if let w = panel?.window {
             StealthMode.apply(to: w, enabled: true)
         }
+
+        // Stealth auto-hide: watch for screen-share apps becoming frontmost
+        // and hide both panels while they are. Default ON; user can disable
+        // via the menu bar toggle.
+        let detector = ScreenShareDetector()
+        detector.setEnabled(appState.screenShareAutoHide)
+        screenShareDetector = detector
+
+        detector.$screenSharingActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] active in
+                self?.appState.hiddenDueToShare = active
+            }
+            .store(in: &cancellables)
+
+        appState.$screenShareAutoHide
+            .dropFirst()
+            .sink { [weak self] on in
+                self?.screenShareDetector?.setEnabled(on)
+            }
+            .store(in: &cancellables)
 
         let scheduler = AdaptiveScheduler(state: appState)
         let dedupe = FrameDedupe()

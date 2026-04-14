@@ -61,6 +61,17 @@ final class MenuBarController {
         exclusionsItem.submenu = submenu
         menu.addItem(exclusionsItem)
 
+        // Stealth auto-hide toggle. Default ON.
+        let hideDuringShare = NSMenuItem(
+            title: "Hide during screen share",
+            action: #selector(toggleScreenShareAutoHide(_:)),
+            keyEquivalent: ""
+        )
+        hideDuringShare.identifier = NSUserInterfaceItemIdentifier("hideDuringShare")
+        hideDuringShare.state = state.screenShareAutoHide ? .on : .off
+        hideDuringShare.target = self
+        menu.addItem(hideDuringShare)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         for item in menu.items { item.target = self }
@@ -94,6 +105,14 @@ final class MenuBarController {
                     } else {
                         item.title = "Recording: idle"
                     }
+                }
+            }
+            .store(in: &cancellables)
+
+        state.$screenShareAutoHide
+            .sink { [weak self] on in
+                if let item = self?.statusItem.menu?.item(withIdentifier: NSUserInterfaceItemIdentifier("hideDuringShare")) {
+                    item.state = on ? .on : .off
                 }
             }
             .store(in: &cancellables)
@@ -132,6 +151,10 @@ final class MenuBarController {
     }
 
     @objc func quit() { NSApp.terminate(nil) }
+
+    @objc func toggleScreenShareAutoHide(_ sender: NSMenuItem) {
+        state.screenShareAutoHide.toggle()
+    }
 
     @objc func toggleExclusion(_ sender: NSMenuItem) {
         guard let bundleID = sender.representedObject as? String else { return }

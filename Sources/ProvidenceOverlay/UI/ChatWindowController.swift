@@ -31,11 +31,16 @@ final class ChatWindowController: NSWindowController {
         // Start hidden; showing is decided by uiMode.
         panel.orderOut(nil)
 
-        // React to uiMode changes.
-        state.$uiMode
-            .removeDuplicates()
-            .sink { [weak self] mode in
-                self?.applyMode(mode)
+        // React to uiMode changes, layered with stealth auto-hide: when a
+        // known screen-share app is frontmost we hide regardless of uiMode.
+        Publishers.CombineLatest(state.$uiMode, state.$hiddenDueToShare)
+            .removeDuplicates(by: { $0 == $1 })
+            .sink { [weak self] (mode, hidden) in
+                if hidden {
+                    self?.window?.orderOut(nil)
+                } else {
+                    self?.applyMode(mode)
+                }
             }
             .store(in: &cancellables)
 
