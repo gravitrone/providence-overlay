@@ -10,6 +10,15 @@ final class ContextCompressor {
     private var lastActivity: Activity = .idle
     private var lastBundleID: String = ""
     private var lastErrorSent: Date = .distantPast
+    /// Last transcript string we emitted on. Used by the Phase G delta gate:
+    /// transcript-only changes must diverge > 30% (Jaccard < 0.70) from this
+    /// value before they trigger a new emission.
+    private var lastEmittedTranscript: String = ""
+
+    /// Phase G: minimum seconds between heartbeat emissions. Dropped from 30s
+    /// to 5s so the always-on chat window feels live, while still throttling
+    /// the steady-state cost when nothing changes.
+    private static let heartbeatInterval: TimeInterval = 5
 
     /// Toggled by the TUI via config. "system_reminder" (default) piggy-backs
     /// on the next user turn. "synthetic_user" injects directly - the compressor
@@ -73,6 +82,13 @@ final class ContextCompressor {
         let dedupe = contentHash == lastSummaryHash
         let sinceLast = now.timeIntervalSince(lastSent)
 
+        // Phase G transcript-delta gate. When a transcript is present and
+        // nothing else observable changed, require the transcript to diverge
+        // >30% (Jaccard < 0.70) from the last emitted one before we burn
+        // tokens on it. Screen-only updates (empty transcript) are unaffected.
+        let transcriptSimilarity = TranscriptSimilarity.jaccard(transcriptTrimmed, lastEmittedTranscript)
+        let transcriptChangedMaterially = !transcriptTrimmed.isEmpty && transcriptSimilarity < 0.70
+
         // Priority-ordered gate. Error fast-path fires within 1s regardless of
         // dedupe, but is throttled to 1/sec to avoid spamming on long error text.
         let emitReason: String?
@@ -84,8 +100,17 @@ final class ContextCompressor {
             emitReason = "pattern"
         } else if !dedupe && activityChanged {
             emitReason = "pattern"
-        } else if !dedupe && sinceLast > 30 {
-            emitReason = "heartbeat"
+        } else if !dedupe && transcriptChangedMaterially {
+            emitReason = "transcript"
+        } else if !dedupe && sinceLast > Self.heartbeatInterval {
+            // Only emit a heartbeat when SOMETHING real is different. A pure
+            // transcript shift that failed the similarity gate should stay
+            // silent; otherwise we'd trivially re-emit every 5s.
+            if transcriptTrimmed.isEmpty || transcriptChangedMaterially || appChanged || activityChanged {
+                emitReason = "heartbeat"
+            } else {
+                emitReason = nil
+            }
         } else {
             emitReason = nil
         }
@@ -123,6 +148,7 @@ final class ContextCompressor {
         lastSummaryHash = contentHash
         lastActivity = activityHint
         lastBundleID = axSnapshot.bundleID ?? ""
+        lastEmittedTranscript = transcriptTrimmed
         if hasError { lastErrorSent = now }
     }
 }
