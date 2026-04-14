@@ -49,10 +49,6 @@ final class MenuBarController {
         recordingItem.identifier = NSUserInterfaceItemIdentifier("recording")
         menu.addItem(recordingItem)
 
-        let batteryItem = NSMenuItem(title: "Battery: —", action: nil, keyEquivalent: "")
-        batteryItem.identifier = NSUserInterfaceItemIdentifier("battery")
-        menu.addItem(batteryItem)
-
         menu.addItem(NSMenuItem.separator())
 
         // Privacy exclusions submenu - Phase 10.
@@ -131,18 +127,12 @@ final class MenuBarController {
             }
             .store(in: &cancellables)
 
-        // Pulse when audio is active OR meeting mode is on.
-        Publishers.CombineLatest(state.$audioActive, state.$meetingMode)
-            .sink { [weak self] audio, meeting in
-                self?.updatePulse(active: audio || meeting)
+        // Pulse menu icon while mic capture is actively producing audio.
+        state.$audioActive
+            .sink { [weak self] audio in
+                self?.updatePulse(active: audio)
                 if let item = self?.statusItem.menu?.item(withIdentifier: NSUserInterfaceItemIdentifier("recording")) {
-                    if meeting {
-                        item.title = "Recording: meeting"
-                    } else if audio {
-                        item.title = "Recording: active"
-                    } else {
-                        item.title = "Recording: idle"
-                    }
+                    item.title = audio ? "Recording: active" : "Recording: idle"
                 }
             }
             .store(in: &cancellables)
@@ -151,15 +141,6 @@ final class MenuBarController {
             .sink { [weak self] on in
                 if let item = self?.statusItem.menu?.item(withIdentifier: NSUserInterfaceItemIdentifier("hideDuringShare")) {
                     item.state = on ? .on : .off
-                }
-            }
-            .store(in: &cancellables)
-
-        Publishers.CombineLatest(state.$batteryLevel, state.$onBattery)
-            .sink { [weak self] level, onBattery in
-                if let item = self?.statusItem.menu?.item(withIdentifier: NSUserInterfaceItemIdentifier("battery")) {
-                    let pct = Int(level * 100)
-                    item.title = onBattery ? "Battery: \(pct)% (unplugged)" : "Battery: \(pct)% (charging)"
                 }
             }
             .store(in: &cancellables)

@@ -2,16 +2,14 @@ import SwiftUI
 
 struct ChatStatusView: View {
     @EnvironmentObject var state: AppState
-    let onTogglePause: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
             flameLogo
-            audioIndicator
-            captureIndicator
+            micToggle
+            eyeToggle
             Spacer()
             tokenPill
-            pauseButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -29,28 +27,32 @@ struct ChatStatusView: View {
         }
     }
 
-    private var audioIndicator: some View {
-        Image(systemName: state.paused ? "mic.slash.fill"
-              : state.audioActive ? "mic.fill" : "mic")
-            .font(.system(size: 10))
-            .foregroundColor(
-                state.paused ? Color.white.opacity(0.25) :
-                state.audioActive ? Color.green.opacity(0.9) :
-                Color.white.opacity(0.35)
-            )
-            .help(state.paused ? "Paused" : state.audioActive ? "Listening" : "Idle mic")
+    private var micToggle: some View {
+        Button(action: { state.micEnabled.toggle() }) {
+            Image(systemName: micIconName)
+                .font(.system(size: 11))
+                .foregroundColor(micColor)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.white.opacity(state.micEnabled ? 0.05 : 0.10)))
+        }
+        .buttonStyle(.plain)
+        .help(state.micEnabled
+              ? (state.audioActive ? "Listening - tap to mute" : "Mic on - tap to mute")
+              : "Mic muted - tap to enable")
     }
 
-    private var captureIndicator: some View {
-        Image(systemName: state.paused ? "eye.slash.fill"
-              : state.captureActive ? "eye.fill" : "eye")
-            .font(.system(size: 10))
-            .foregroundColor(
-                state.paused ? Color.white.opacity(0.25) :
-                state.captureActive ? Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.85) :
-                Color.white.opacity(0.35)
-            )
-            .help(state.paused ? "Paused" : state.captureActive ? "Observing screen" : "Capture idle")
+    private var eyeToggle: some View {
+        Button(action: { state.screenEnabled.toggle() }) {
+            Image(systemName: eyeIconName)
+                .font(.system(size: 11))
+                .foregroundColor(eyeColor)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.white.opacity(state.screenEnabled ? 0.05 : 0.10)))
+        }
+        .buttonStyle(.plain)
+        .help(state.screenEnabled
+              ? (state.captureActive ? "Watching screen - tap to hide" : "Screen on - tap to hide")
+              : "Screen hidden - tap to enable")
     }
 
     private var tokenPill: some View {
@@ -59,29 +61,28 @@ struct ChatStatusView: View {
             .foregroundColor(.white.opacity(0.55))
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.06))
-            )
+            .background(Capsule().fill(Color.white.opacity(0.06)))
             .help("Tokens injected this session")
     }
 
-    private var pauseButton: some View {
-        Button(action: onTogglePause) {
-            Image(systemName: state.paused ? "play.fill" : "pause.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(
-                    state.paused
-                        ? Color(red: 1.0, green: 0.65, blue: 0.20)
-                        : Color.white.opacity(0.55)
-                )
-                .frame(width: 20, height: 20)
-                .background(
-                    Circle().fill(Color.white.opacity(state.paused ? 0.12 : 0.06))
-                )
-        }
-        .buttonStyle(.plain)
-        .help(state.paused ? "Resume ambient capture" : "Pause ambient capture")
+    private var micIconName: String {
+        if !state.micEnabled { return "mic.slash.fill" }
+        return state.audioActive ? "mic.fill" : "mic"
+    }
+    private var micColor: Color {
+        if !state.micEnabled { return Color.red.opacity(0.75) }
+        return state.audioActive ? Color.green.opacity(0.9) : Color.white.opacity(0.45)
+    }
+
+    private var eyeIconName: String {
+        if !state.screenEnabled { return "eye.slash.fill" }
+        return state.captureActive ? "eye.fill" : "eye"
+    }
+    private var eyeColor: Color {
+        if !state.screenEnabled { return Color.red.opacity(0.75) }
+        return state.captureActive
+            ? Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.9)
+            : Color.white.opacity(0.45)
     }
 
     private func formatTokens(_ n: Int) -> String {

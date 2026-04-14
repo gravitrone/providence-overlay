@@ -2,6 +2,15 @@ import Foundation
 import Combine
 import ProvidenceOverlayCore
 
+/// UserDefaults keys for persisted toggles.
+private enum DefaultsKey {
+    static let micEnabled = "providence.micEnabled"
+    static let screenEnabled = "providence.screenEnabled"
+    static let chatPosition = "providence.chatPosition"
+    static let chatAlpha = "providence.chatAlpha"
+    static let uiMode = "providence.uiMode"
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var connectionStatus: String = "disconnected"
@@ -12,46 +21,64 @@ final class AppState: ObservableObject {
     @Published var model: String = ""
     @Published var emberActive: Bool = false
 
-    // Phase 7 additions
-    @Published var currentActivity: Activity = .idle
-    @Published var currentApp: String = ""
-    @Published var currentFPS: Double = 0.2
-    @Published var panelInteractive: Bool = false
-
-    // Phase 8 additions
-    @Published var meetingMode: Bool = false
+    // Audio + transcript
     @Published var transcript: String = ""
     @Published var latestSegment: String = ""
     @Published var wakeWordArmed: Bool = false
     @Published var audioActive: Bool = false
     @Published var pttActive: Bool = false
 
-    // Phase 10 additions
-    @Published var wakeWordAllowed: Bool = true   // battery-gated
     @Published var ttsEnabled: Bool = false
-    @Published var batteryLevel: Double = 1.0
-    @Published var onBattery: Bool = false
     @Published var panelPosition: String = "right-sidebar"
+    @Published var panelInteractive: Bool = false
 
-    // Phase A (chat overlay): persistent chat window rendering config.
-    @Published var uiMode: String = "ghost"
+    // Chat panel (UserDefaults-backed; defaults registered in OverlayApp).
+    @Published var uiMode: String {
+        didSet { UserDefaults.standard.set(uiMode, forKey: DefaultsKey.uiMode) }
+    }
     @Published var chatHistoryLimit: Int = 50
-    @Published var chatAlpha: Double = 0.92
-    @Published var chatPosition: String = "right"
+    @Published var chatAlpha: Double {
+        didSet { UserDefaults.standard.set(chatAlpha, forKey: DefaultsKey.chatAlpha) }
+    }
+    @Published var chatPosition: String {
+        didSet { UserDefaults.standard.set(chatPosition, forKey: DefaultsKey.chatPosition) }
+    }
 
-    // Phase B (chat overlay): persistent conversation history.
     @Published var chatMessages: [ChatMessage] = []
 
-    // Phase F (chat overlay): context_ack capture + pause state.
     @Published var sessionTokens: Int = 0
-    @Published var lastContextReason: String = ""    // "pattern"|"error"|"heartbeat"|"user-invoked"
-    @Published var paused: Bool = false
+    @Published var lastContextReason: String = ""
 
-    // Stealth auto-hide: detect frontmost screen-share apps and hide panels.
-    @Published var screenShareAutoHide: Bool = true    // user toggle
-    @Published var hiddenDueToShare: Bool = false      // current auto-hide state
+    /// Independent privacy kill switches. Persist across launches via UserDefaults.
+    /// Setting either to false fully stops the corresponding service and blocks
+    /// any context_update emission. Setting back to true restarts it.
+    @Published var micEnabled: Bool {
+        didSet { UserDefaults.standard.set(micEnabled, forKey: DefaultsKey.micEnabled) }
+    }
+    @Published var screenEnabled: Bool {
+        didSet { UserDefaults.standard.set(screenEnabled, forKey: DefaultsKey.screenEnabled) }
+    }
 
-    /// Append a committed message to history, trimming oldest when past the limit.
+    @Published var screenShareAutoHide: Bool = true
+    @Published var hiddenDueToShare: Bool = false
+
+    init() {
+        let d = UserDefaults.standard
+        // First-launch defaults: both toggles ON, chat position right, alpha 0.92.
+        d.register(defaults: [
+            DefaultsKey.micEnabled: true,
+            DefaultsKey.screenEnabled: true,
+            DefaultsKey.chatPosition: "right",
+            DefaultsKey.chatAlpha: 0.92,
+            DefaultsKey.uiMode: "chat",
+        ])
+        self.micEnabled = d.bool(forKey: DefaultsKey.micEnabled)
+        self.screenEnabled = d.bool(forKey: DefaultsKey.screenEnabled)
+        self.uiMode = d.string(forKey: DefaultsKey.uiMode) ?? "chat"
+        self.chatAlpha = d.double(forKey: DefaultsKey.chatAlpha)
+        self.chatPosition = d.string(forKey: DefaultsKey.chatPosition) ?? "right"
+    }
+
     func addChatMessage(role: ChatMessage.Role, text: String) {
         guard !text.isEmpty else { return }
         let msg = ChatMessage(role: role, text: text)
@@ -59,9 +86,6 @@ final class AppState: ObservableObject {
         chatMessages = ChatHistory.trimmed(chatMessages, limit: chatHistoryLimit)
     }
 
-    /// Stream a partial assistant delta into the live-streaming buffer
-    /// (`latestAssistantText`). When `finished == true`, commit that buffer
-    /// to history as a role=.assistant message and clear the buffer.
     func appendAssistantDelta(_ text: String, finished: Bool) {
         latestAssistantText += text
         if finished {

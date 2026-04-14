@@ -4,7 +4,6 @@ import ProvidenceOverlayCore
 struct ChatRootView: View {
     @EnvironmentObject var state: AppState
     let onSubmit: (String) -> Void
-    let onTogglePause: () -> Void
 
     @State private var inputText: String = ""
     @FocusState private var inputFocused: Bool
@@ -18,7 +17,7 @@ struct ChatRootView: View {
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
                 .opacity(0.55)
             VStack(spacing: 0) {
-                ChatStatusView(onTogglePause: onTogglePause)
+                ChatStatusView()
                 Divider().background(Color.white.opacity(0.1))
                 messagesList
                 Divider().background(Color.white.opacity(0.1))
