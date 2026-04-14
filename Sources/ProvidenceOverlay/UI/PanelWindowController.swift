@@ -32,6 +32,21 @@ final class PanelWindowController: NSWindowController {
             }
             .store(in: &cancellables)
 
+        // Phase C (chat overlay): hide the ghost suggestion panel when uiMode=="chat"
+        // (chat-only). Show in "ghost" or "both".
+        state.$uiMode
+            .removeDuplicates()
+            .sink { [weak self] mode in
+                guard let panel = self?.window else { return }
+                switch mode {
+                case "chat":
+                    panel.orderOut(nil)
+                default:  // ghost or both
+                    panel.orderFrontRegardless()
+                }
+            }
+            .store(in: &cancellables)
+
         // Phase 10: react to runtime position changes from Welcome.
         state.$panelPosition
             .removeDuplicates()
