@@ -193,7 +193,8 @@ final class BridgeClient {
 
     private func sendHello() {
         let pid = Int(ProcessInfo.processInfo.processIdentifier)
-        let hello = Hello(client_version: "0.1.0-phase6", capabilities: ["scstream"], pid: pid)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        let hello = Hello(client_version: version, capabilities: ["scstream"], pid: pid)
         sendEnvelope(type: MessageType.hello, data: hello)
     }
 

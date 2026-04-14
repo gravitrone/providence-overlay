@@ -9,7 +9,7 @@
     <key>CFBundleName</key>
     <string>providence-overlay</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0-phase6</string>
+    <string>0.1.0-phase11</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSScreenCaptureDescription</key>
