@@ -23,6 +23,5 @@ enum Logger {
                 try? Data(line.utf8).write(to: path)
             }
         }
-        FileHandle.standardError.write(Data(line.utf8))
     }
 }
