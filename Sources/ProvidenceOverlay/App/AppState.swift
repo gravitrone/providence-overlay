@@ -38,4 +38,27 @@ final class AppState: ObservableObject {
     @Published var chatHistoryLimit: Int = 50
     @Published var chatAlpha: Double = 0.92
     @Published var chatPosition: String = "right"
+
+    // Phase B (chat overlay): persistent conversation history.
+    @Published var chatMessages: [ChatMessage] = []
+
+    /// Append a committed message to history, trimming oldest when past the limit.
+    func addChatMessage(role: ChatMessage.Role, text: String) {
+        guard !text.isEmpty else { return }
+        let msg = ChatMessage(role: role, text: text)
+        chatMessages.append(msg)
+        chatMessages = ChatHistory.trimmed(chatMessages, limit: chatHistoryLimit)
+    }
+
+    /// Stream a partial assistant delta into the live-streaming buffer
+    /// (`latestAssistantText`). When `finished == true`, commit that buffer
+    /// to history as a role=.assistant message and clear the buffer.
+    func appendAssistantDelta(_ text: String, finished: Bool) {
+        latestAssistantText += text
+        if finished {
+            let committed = latestAssistantText
+            latestAssistantText = ""
+            addChatMessage(role: .assistant, text: committed)
+        }
+    }
 }

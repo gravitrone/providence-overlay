@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import ProvidenceOverlayCore
 
 enum BridgeError: Error {
     case socketCreateFailed(Int32)
@@ -146,11 +147,7 @@ final class BridgeClient {
             }
         case MessageType.assistantDelta:
             if let d = try? env.data?.decode(AssistantDelta.self) {
-                if d.finished == true {
-                    // Keep text visible; reset happens on next non-empty delta stream start.
-                } else {
-                    state.latestAssistantText += d.text
-                }
+                state.appendAssistantDelta(d.text, finished: d.finished ?? false)
                 onAssistantDelta?(d.text, d.finished ?? false)
             }
         case MessageType.emberState:
@@ -174,6 +171,8 @@ final class BridgeClient {
     // MARK: - Send helpers
 
     func sendUserQuery(_ text: String, source: String) {
+        // Append to local chat history first so UI reflects the send optimistically.
+        state.addChatMessage(role: .user, text: text)
         sendEnvelope(type: MessageType.userQuery, data: UserQuery(text: text, source: source))
     }
 
