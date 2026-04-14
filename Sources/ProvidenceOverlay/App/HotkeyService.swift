@@ -6,15 +6,21 @@ import Carbon.HIToolbox
 final class HotkeyService {
     private var toggleHotkeyRef: EventHotKeyRef?
     private var pttHotkeyRef: EventHotKeyRef?
+    private var chatHotkeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
     private let state: AppState
     private weak var panelController: PanelWindowController?
     private static let toggleEventID: UInt32 = 0xBEE5
     private static let pttEventID: UInt32 = 0xBEE6
+    private static let chatEventID: UInt32 = 0xBEE7
 
     /// Callback: fires on PTT press (Cmd+Option+Space). Treated as a momentary tap
     /// that opens a 10s transcription window; a second press early-finishes it.
     var onPushToTalk: (() -> Void)?
+
+    /// Callback: fires on Cmd+Shift+C. Toggles chat window visibility without
+    /// mutating uiMode.
+    var onChatToggle: (() -> Void)?
 
     init(state: AppState, panelController: PanelWindowController) {
         self.state = state
@@ -71,6 +77,24 @@ final class HotkeyService {
         } else {
             Logger.log("hotkey: PTT register failed status=\(ps)")
         }
+
+        // Cmd+Shift+C -> toggle chat window visibility
+        let chatID = EventHotKeyID(signature: OSType(0x50524F56), id: Self.chatEventID)
+        var cref: EventHotKeyRef?
+        let cs = RegisterEventHotKey(
+            UInt32(kVK_ANSI_C),
+            UInt32(cmdKey | shiftKey),
+            chatID,
+            GetApplicationEventTarget(),
+            0,
+            &cref
+        )
+        if cs == noErr {
+            chatHotkeyRef = cref
+            Logger.log("hotkey: Cmd+Shift+C (chat toggle) registered")
+        } else {
+            Logger.log("hotkey: chat toggle register failed status=\(cs)")
+        }
     }
 
     fileprivate func handlePress(_ eventID: UInt32) {
@@ -79,6 +103,8 @@ final class HotkeyService {
             panelController?.toggleClickThrough()
         case Self.pttEventID:
             onPushToTalk?()
+        case Self.chatEventID:
+            onChatToggle?()
         default:
             break
         }
@@ -106,6 +132,7 @@ final class HotkeyService {
     deinit {
         if let r = toggleHotkeyRef { UnregisterEventHotKey(r) }
         if let r = pttHotkeyRef { UnregisterEventHotKey(r) }
+        if let r = chatHotkeyRef { UnregisterEventHotKey(r) }
         if let h = handlerRef { RemoveEventHandler(h) }
     }
 }

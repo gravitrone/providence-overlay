@@ -105,6 +105,9 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         hotkeyService?.onPushToTalk = { [weak self] in
             Task { @MainActor in self?.handlePTT() }
         }
+        hotkeyService?.onChatToggle = { [weak self] in
+            self?.chatWindowController?.toggleVisibility()
+        }
         hotkeyService?.install()
 
         // Phase 8: audio pipeline
