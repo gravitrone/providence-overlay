@@ -5,16 +5,21 @@ import Combine
 @MainActor
 final class ChatWindowController: NSWindowController {
     private let state: AppState
+    private weak var bridgeClient: BridgeClient?
     private var cancellables = Set<AnyCancellable>()
 
-    init(state: AppState) {
+    init(state: AppState, bridgeClient: BridgeClient) {
         self.state = state
+        self.bridgeClient = bridgeClient
 
         let screen = NSScreen.main ?? NSScreen.screens.first!
         let initialFrame = Self.computeInitialFrame(screen: screen, position: state.chatPosition)
         let panel = ChatPanel(contentRect: initialFrame)
 
-        let hostingView = NSHostingView(rootView: ChatRootView().environmentObject(state))
+        let rootView = ChatRootView(onSubmit: { [weak bridgeClient] text in
+            bridgeClient?.sendUserQuery(text, source: "chat_input")
+        }).environmentObject(state)
+        let hostingView = NSHostingView(rootView: rootView)
         hostingView.translatesAutoresizingMaskIntoConstraints = true
         panel.contentView = hostingView
 

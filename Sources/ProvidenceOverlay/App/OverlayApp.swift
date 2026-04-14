@@ -51,7 +51,7 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         menuBar = MenuBarController(state: appState, exclusions: exclusions)
         bridgeClient = BridgeClient(socketPath: socketPath, state: appState)
         panel = PanelWindowController(state: appState)
-        chatWindowController = ChatWindowController(state: appState)
+        chatWindowController = ChatWindowController(state: appState, bridgeClient: bridgeClient!)
 
         // Phase 10: stealth - hide overlay panel from screen capture.
         // sharingType = .none works for legacy APIs and most screen-share apps;

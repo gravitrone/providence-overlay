@@ -3,6 +3,10 @@ import ProvidenceOverlayCore
 
 struct ChatRootView: View {
     @EnvironmentObject var state: AppState
+    let onSubmit: (String) -> Void
+
+    @State private var inputText: String = ""
+    @FocusState private var inputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,12 +14,21 @@ struct ChatRootView: View {
             Divider().background(Color.white.opacity(0.1))
             messagesList
             Divider().background(Color.white.opacity(0.1))
-            inputStub
+            ChatInputView(text: $inputText, focused: $inputFocused, onSubmit: handleSubmit)
         }
         .background(
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onAppear { inputFocused = true }
+    }
+
+    private func handleSubmit() {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onSubmit(trimmed)
+        // Safety clear in case the child's clear races.
+        inputText = ""
     }
 
     private var statusBar: some View {
@@ -95,20 +108,6 @@ struct ChatRootView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
-    }
-
-    private var inputStub: some View {
-        HStack {
-            Text("Ask the Profaned Core…")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.3))
-            Spacer()
-            Text("(Phase E)")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.2))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
     }
 }
 
