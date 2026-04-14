@@ -90,6 +90,11 @@ struct SessionEvent: Codable {
 struct ContextAck: Codable {
     let timestamp: String?
     let accepted: Bool?
+    // Phase 9 server broadcast extensions (Phase F consumed them).
+    let tokens: Int?
+    let reason: String?
+    let mode: String?
+    let total_session_tokens: Int?
 }
 
 struct Bye: Codable {

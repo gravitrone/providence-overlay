@@ -51,7 +51,11 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         menuBar = MenuBarController(state: appState, exclusions: exclusions)
         bridgeClient = BridgeClient(socketPath: socketPath, state: appState)
         panel = PanelWindowController(state: appState)
-        chatWindowController = ChatWindowController(state: appState, bridgeClient: bridgeClient!)
+        chatWindowController = ChatWindowController(
+            state: appState,
+            bridgeClient: bridgeClient!,
+            onTogglePause: { [weak self] in self?.togglePause() }
+        )
 
         // Phase 10: stealth - hide overlay panel from screen capture.
         // sharingType = .none works for legacy APIs and most screen-share apps;
@@ -240,6 +244,29 @@ final class OverlayApp: NSObject, NSApplicationDelegate {
         if !text.isEmpty {
             tts?.armForNextReply(source: "push_to_talk")
             bridgeClient?.sendUserQuery(text, source: "push_to_talk")
+        }
+    }
+
+    /// Phase F: pause/resume ambient capture. Actually halts audio + screen
+    /// capture services (not just a UI flag). Resume re-starts them.
+    private func togglePause() {
+        if appState.paused {
+            let audio = audioService
+            let capture = captureService
+            Task {
+                do {
+                    try await audio?.start()
+                } catch {
+                    Logger.log("resume: audio start error \(error)")
+                }
+                await capture?.start()
+                await MainActor.run { self.appState.paused = false }
+            }
+        } else {
+            audioService?.stop()
+            let capture = captureService
+            Task { await capture?.stop() }
+            appState.paused = true
         }
     }
 
