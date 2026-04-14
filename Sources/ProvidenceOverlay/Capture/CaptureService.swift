@@ -8,6 +8,18 @@ import AppKit
 import Combine
 import ProvidenceOverlayCore
 
+/// Thread-safe frame counter for the nonisolated sample callback. Used only for
+/// diagnostic "every-Nth-frame" logging - not load-bearing for capture correctness.
+final class FrameCounter: @unchecked Sendable {
+    private var value: UInt64 = 0
+    private let lock = NSLock()
+    func incrementAndGet() -> UInt64 {
+        lock.lock(); defer { lock.unlock() }
+        value &+= 1
+        return value
+    }
+}
+
 /// Phase 7: Adaptive SCStream -> dedupe -> AX snapshot -> classify -> compress/emit.
 @MainActor
 final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
@@ -19,7 +31,12 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     private var stream: SCStream?
     private var cancellables = Set<AnyCancellable>()
     nonisolated private let processingQueue = DispatchQueue(label: "overlay.capture.process", qos: .utility)
+    // Persistent sample handler queue - allocating inline per start() would let ARC
+    // reclaim it as soon as startStream returned, killing the callback path.
+    nonisolated private let sampleQueue = DispatchQueue(label: "overlay.capture.samples", qos: .userInitiated)
+    nonisolated private let frameCounter = FrameCounter()
     private var currentFPS: Double = 0.2
+    private var started: Bool = false
 
     init(
         state: AppState,
@@ -46,6 +63,7 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func start() async {
         let initialFPS = scheduler.fps
+        Logger.log("capture: start() invoked, initialFPS=\(initialFPS)")
         await startStream(fps: initialFPS)
     }
 
@@ -54,38 +72,69 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
             try? await s.stopCapture()
         }
         stream = nil
+        started = false
         state.captureActive = false
     }
 
     private func startStream(fps: Double) async {
+        if started {
+            Logger.log("capture: startStream skipped - already started")
+            return
+        }
         do {
-            let content = try await SCShareableContent.current
-            guard let display = content.displays.first else {
-                Logger.log("capture: no displays available")
+            Logger.log("capture: querying shareable content")
+            // excludingDesktopWindows form triggers a fresh TCC permission check
+            // and sidesteps any stale cached SCShareableContent from a prior
+            // denied state. If permission is genuinely absent this throws.
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: true
+            )
+            Logger.log("capture: shareable content -> \(content.displays.count) displays, \(content.windows.count) windows")
+            if let display = content.displays.first {
+                try await configureAndStart(display: display, fps: fps)
                 return
             }
-            let filter = SCContentFilter(display: display, excludingWindows: [])
-            let config = SCStreamConfiguration()
-            let ts = Int32(max(1, Int(round(1000.0 / max(0.1, fps)))))
-            // minimumFrameInterval in seconds: 1/fps. Use timescale=1000 to allow fractional fps.
-            config.minimumFrameInterval = CMTime(value: CMTimeValue(ts), timescale: 1000)
-            config.width = display.width / 2
-            config.height = display.height / 2
-            config.pixelFormat = kCVPixelFormatType_32BGRA
-            let s = SCStream(filter: filter, configuration: config, delegate: self)
-            try s.addStreamOutput(
-                self,
-                type: .screen,
-                sampleHandlerQueue: DispatchQueue(label: "overlay.capture")
+            Logger.log("capture: no displays available - retrying in 1.5s")
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            let retry = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: true
             )
-            try await s.startCapture()
-            self.stream = s
-            self.currentFPS = fps
-            state.captureActive = true
-            Logger.log("capture: started at \(fps) fps")
+            Logger.log("capture: retry -> \(retry.displays.count) displays")
+            guard let retryDisplay = retry.displays.first else {
+                Logger.log("capture: still no displays after retry - giving up (permission likely denied)")
+                return
+            }
+            try await configureAndStart(display: retryDisplay, fps: fps)
         } catch {
-            Logger.log("capture: start error: \(error)")
+            Logger.log("capture: start error: \(error.localizedDescription) [\(type(of: error))]")
         }
+    }
+
+    private func configureAndStart(display: SCDisplay, fps: Double) async throws {
+        Logger.log("capture: chose display=\(display.displayID) size=\(display.width)x\(display.height)")
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let config = SCStreamConfiguration()
+        let ts = Int32(max(1, Int(round(1000.0 / max(0.1, fps)))))
+        config.minimumFrameInterval = CMTime(value: CMTimeValue(ts), timescale: 1000)
+        config.width = display.width / 2
+        config.height = display.height / 2
+        config.pixelFormat = kCVPixelFormatType_32BGRA
+        Logger.log("capture: configuring stream fps=\(fps) w=\(config.width) h=\(config.height) interval=\(ts)/1000s")
+        let s = SCStream(filter: filter, configuration: config, delegate: self)
+        try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
+        Logger.log("capture: stream output added, calling startCapture()")
+        do {
+            try await s.startCapture()
+            Logger.log("capture: startCapture() returned success")
+        } catch {
+            Logger.log("capture: startCapture() threw: \(error.localizedDescription) [\(type(of: error))]")
+            throw error
+        }
+        self.stream = s
+        self.currentFPS = fps
+        self.started = true
+        state.captureActive = true
+        Logger.log("capture: started at \(fps) fps")
     }
 
     private func applyFPS(_ fps: Double) async {
@@ -119,6 +168,11 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
         guard sampleBuffer.isValid,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
+        let count = frameCounter.incrementAndGet()
+        if count == 1 || count % 10 == 0 {
+            Logger.log("capture: frame \(count) received")
+        }
+
         // Convert to CGImage on the current (sample handler) queue, then hop to main.
         guard let cg = Self.cgImage(from: pixelBuffer) else { return }
         Task { @MainActor [cg] in
@@ -130,6 +184,7 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
     private func processFrame(_ cg: CGImage) {
         let result = dedupe.shouldKeep(cg, threshold: 3)
         if !result.keep {
+            // Keep this sparse - dedupe skips are extremely common.
             return
         }
         let snap = AXReader.snapshot() ?? AXSnapshot(
@@ -139,6 +194,7 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
             focusedElementValue: nil,
             summary: ""
         )
+        Logger.log("capture: kept frame hamming=\(result.hamming) app=\(snap.bundleID ?? "nil") title=\(snap.windowTitle.prefix(40))")
 
         let input = ClassifierInput(
             bundleID: snap.bundleID,
@@ -148,6 +204,7 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
             audioActive: state.audioActive
         )
         let activity = ActivityClassifier.classify(input)
+        Logger.log("capture: classified activity=\(activity.rawValue)")
 
         // Publish for UI.
         let wasMeeting = state.currentActivity == .meeting
