@@ -33,16 +33,20 @@ final class ContextCompressor {
         activityHint: Activity,
         changeKind: String
     ) {
+        Logger.log("compressor: consider app=\(axSnapshot.bundleID ?? "nil") activity=\(activityHint.rawValue) changeKind=\(changeKind)")
+
         // Loopback: skip if active app is Providence itself (TUI terminal or overlay).
         if let b = axSnapshot.bundleID,
            b == "com.gravitrone.providence.overlay" ||
             b == "com.apple.Terminal" ||
             b == "com.googlecode.iterm2" {
+            Logger.log("compressor: skipped (loopback app=\(b))")
             return
         }
 
         // Phase 10: runtime privacy exclusions (1Password, Keychain, etc).
         if let b = axSnapshot.bundleID, exclusions?.contains(b) == true {
+            Logger.log("compressor: skipped (exclusion app=\(b))")
             return
         }
 
@@ -86,7 +90,10 @@ final class ContextCompressor {
             emitReason = nil
         }
 
-        guard let reason = emitReason else { return }
+        guard let reason = emitReason else {
+            Logger.log("compressor: no emit (dedupe=\(dedupe) appChanged=\(appChanged) activityChanged=\(activityChanged) sinceLast=\(Int(sinceLast))s)")
+            return
+        }
 
         let tokens = TokenBudget.summarize(ContextUpdateFields(
             app: axSnapshot.bundleID ?? axSnapshot.appName,

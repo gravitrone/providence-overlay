@@ -28,6 +28,10 @@ final class AdaptiveScheduler: ObservableObject {
         self.state = state
         wireAppSwitchObservers()
         startIdleTimer()
+        Logger.log("scheduler: installed, initial mode=\(mode.rawValue) fps=\(fps)")
+        // Kick an initial evaluation so the @Published fps emits a fresh value
+        // and any frontmost-app state is captured at launch.
+        markActive()
     }
 
     deinit {
@@ -57,9 +61,11 @@ final class AdaptiveScheduler: ObservableObject {
 
     private func transitionTo(_ newMode: CaptureMode) {
         if mode == newMode { return }
-        Logger.log("scheduler: transition \(mode.rawValue) -> \(newMode.rawValue)")
+        let oldMode = mode
+        let newFps = fpsFor(newMode)
+        Logger.log("scheduler: marked active, transition=\(oldMode.rawValue)->\(newMode.rawValue) fps=\(newFps)")
         mode = newMode
-        fps = fpsFor(newMode)
+        fps = newFps
     }
 
     private func fpsFor(_ mode: CaptureMode) -> Double {
@@ -74,8 +80,13 @@ final class AdaptiveScheduler: ObservableObject {
     private func wireAppSwitchObservers() {
         NSWorkspace.shared.notificationCenter
             .publisher(for: NSWorkspace.didActivateApplicationNotification)
-            .sink { [weak self] _ in
-                Task { @MainActor in self?.markActive() }
+            .sink { [weak self] note in
+                let bundleID = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
+                    .bundleIdentifier ?? "?"
+                Task { @MainActor in
+                    Logger.log("scheduler: workspace activation, bundle=\(bundleID)")
+                    self?.markActive()
+                }
             }
             .store(in: &cancellables)
     }
