@@ -61,6 +61,25 @@ final class MenuBarController {
         exclusionsItem.submenu = submenu
         menu.addItem(exclusionsItem)
 
+        // UI Mode submenu - Phase H. Radio-style: ghost / chat / both.
+        let uiModeItem = NSMenuItem(title: "UI Mode", action: nil, keyEquivalent: "")
+        let uiModeSubmenu = NSMenu()
+        let modes: [(title: String, key: String)] = [
+            ("Ghost (suggestions only)", "ghost"),
+            ("Chat (persistent panel)",  "chat"),
+            ("Both",                      "both"),
+        ]
+        for (title, key) in modes {
+            let item = NSMenuItem(title: title, action: #selector(setUIMode(_:)), keyEquivalent: "")
+            item.representedObject = key
+            item.state = (state.uiMode == key) ? .on : .off
+            item.target = self
+            uiModeSubmenu.addItem(item)
+        }
+        uiModeItem.submenu = uiModeSubmenu
+        uiModeItem.identifier = NSUserInterfaceItemIdentifier("uiMode")
+        menu.addItem(uiModeItem)
+
         // Stealth auto-hide toggle. Default ON.
         let hideDuringShare = NSMenuItem(
             title: "Hide during screen share",
@@ -77,14 +96,26 @@ final class MenuBarController {
         for item in menu.items { item.target = self }
         statusItem.menu = menu
 
-        wireObservers()
+        wireObservers(uiModeSubmenu: uiModeSubmenu)
     }
 
     deinit {
         pulseTimer?.invalidate()
     }
 
-    private func wireObservers() {
+    private func wireObservers(uiModeSubmenu: NSMenu? = nil) {
+        if let submenu = uiModeSubmenu {
+            state.$uiMode
+                .sink { [weak submenu] current in
+                    guard let submenu = submenu else { return }
+                    for item in submenu.items {
+                        let key = item.representedObject as? String ?? ""
+                        item.state = (key == current) ? .on : .off
+                    }
+                }
+                .store(in: &cancellables)
+        }
+
         state.$connectionStatus
             .sink { [weak self] status in
                 if let item = self?.statusItem.menu?.item(withIdentifier: NSUserInterfaceItemIdentifier("connection")) {
@@ -154,6 +185,11 @@ final class MenuBarController {
 
     @objc func toggleScreenShareAutoHide(_ sender: NSMenuItem) {
         state.screenShareAutoHide.toggle()
+    }
+
+    @objc func setUIMode(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        state.uiMode = key
     }
 
     @objc func toggleExclusion(_ sender: NSMenuItem) {

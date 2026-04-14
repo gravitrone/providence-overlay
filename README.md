@@ -179,6 +179,43 @@ between `right-sidebar` (default) and `bottom-bar`.
   dialog (add via config or the JSON file for now).
 - Wake-word suppression on low battery is silent - no user-facing toast.
 
+## UI Modes
+
+The overlay exposes two panels: the ghost suggestion panel (proactive
+`assistant_delta` fade-ins) and a persistent transparent chat window.
+Which one is visible is controlled by `[overlay].ui_mode` in
+`~/.providence/config.toml` and by the menu bar *UI Mode* submenu.
+
+Values:
+
+- `ghost` - suggestions panel only (default, matches pre-Phase-C behaviour)
+- `chat`  - persistent chat window only
+- `both`  - both panels visible
+
+Example config:
+
+```toml
+[overlay]
+enable = true
+ui_mode = "chat"
+chat_history_limit = 50
+chat_alpha = 0.92
+chat_position = "right"
+daily_token_budget = 50000
+```
+
+### Hotkeys
+
+- `Cmd+Shift+P` - toggle ghost panel click-through (interactive vs ambient)
+- `Cmd+Shift+C` - toggle chat window visibility (does not mutate `ui_mode`)
+- `Cmd+Option+Space` - push-to-talk (10s transcription window; second tap ends early)
+
+### Menu bar
+
+- *UI Mode* submenu - switch between `ghost` / `chat` / `both` at runtime
+- *Privacy Exclusions* - per-app capture suppression
+- *Hide during screen share* - stealth auto-hide toggle (default ON)
+
 ## Directory layout
 
 ```
