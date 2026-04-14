@@ -6,10 +6,6 @@
 
 Providence Overlay is a transparent floating chat panel that runs as a menu bar companion to [Providence Core](https://github.com/gravitrone/providence-core). It captures screen + audio, classifies what you are doing, and feeds that context into your assistant's next turn. **Think of it as a heads-up display for an LLM session**, not a separate chatbot.
 
-***One shared session, two surfaces: the terminal you type in and the ghost panel watching over your shoulder.***
-
-> For developers running Providence Core who want their assistant to see what they are doing without screenshot tools, without context switching, without re-explaining the codebase every turn.
-
 ## Quickstart
 
 ```bash
@@ -107,10 +103,6 @@ Targets macOS 14.2+. Tests require `DEVELOPER_DIR=/Applications/Xcode.app/Conten
 ## Contributing
 
 Pull requests welcome. For substantial changes, open an issue first to discuss. Follow the conventions in [CLAUDE.md](./CLAUDE.md).
-
-## Legal
-
-Providence Overlay uses documented macOS APIs and respects the system permission model. It does not evade Transparency, Consent, and Control. Users grant Screen Recording, Accessibility, and Microphone permissions explicitly through macOS System Settings.
 
 ## License
 
