@@ -32,4 +32,10 @@ final class AppState: ObservableObject {
     @Published var batteryLevel: Double = 1.0
     @Published var onBattery: Bool = false
     @Published var panelPosition: String = "right-sidebar"
+
+    // Phase A (chat overlay): persistent chat window rendering config.
+    @Published var uiMode: String = "ghost"
+    @Published var chatHistoryLimit: Int = 50
+    @Published var chatAlpha: Double = 0.92
+    @Published var chatPosition: String = "right"
 }

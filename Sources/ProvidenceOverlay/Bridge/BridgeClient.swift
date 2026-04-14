@@ -139,6 +139,8 @@ final class BridgeClient {
                 state.emberActive = w.ember_active ?? false
                 if let tts = w.tts_enabled { state.ttsEnabled = tts }
                 if let pos = w.position, !pos.isEmpty { state.panelPosition = pos }
+                if let mode = w.ui_mode, !mode.isEmpty { state.uiMode = mode }
+                if let limit = w.chat_history_limit, limit > 0 { state.chatHistoryLimit = limit }
                 Logger.log("bridge: welcome session=\(state.sessionID) engine=\(state.engine) tts=\(state.ttsEnabled) pos=\(state.panelPosition)")
                 onWelcome?(w)
             }
