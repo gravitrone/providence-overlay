@@ -145,13 +145,25 @@ final class CaptureService: NSObject, SCStreamOutput, SCStreamDelegate {
             windowTitle: snap.windowTitle,
             axSummary: snap.summary,
             ocrText: nil,
-            audioActive: false
+            audioActive: state.audioActive
         )
         let activity = ActivityClassifier.classify(input)
 
         // Publish for UI.
+        let wasMeeting = state.currentActivity == .meeting
         state.currentActivity = activity
         state.currentApp = snap.appName
+
+        // Phase 8: meeting mode transitions drive transcript visibility + scheduler hints.
+        let isMeeting = activity == .meeting
+        if isMeeting != wasMeeting {
+            state.meetingMode = isMeeting
+            if isMeeting {
+                scheduler.markMeetingDetected()
+            } else {
+                scheduler.markMeetingEnded()
+            }
+        }
 
         compressor.consider(
             axSnapshot: snap,

@@ -17,4 +17,12 @@ final class AppState: ObservableObject {
     @Published var currentApp: String = ""
     @Published var currentFPS: Double = 0.2
     @Published var panelInteractive: Bool = false
+
+    // Phase 8 additions
+    @Published var meetingMode: Bool = false
+    @Published var transcript: String = ""
+    @Published var latestSegment: String = ""
+    @Published var wakeWordArmed: Bool = false
+    @Published var audioActive: Bool = false
+    @Published var pttActive: Bool = false
 }

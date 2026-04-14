@@ -71,11 +71,35 @@ Ambient capture pipeline:
 
 `ContextUpdate` gained an `origin` field (`"overlay"`).
 
-Deferred:
+Deferred (phase 7):
 
-- Audio capture + wake phrase
 - OCR pipeline
 - Plugin tab contributions
+
+## Phase 8 scope
+
+Audio pipeline:
+
+- `AudioService` - `AVAudioEngine` mic capture, RMS level meter, sustained-speech detector (`audioActive` flips true after >2s of speech-level input, false after 1s silence). Publishes 16kHz mono Float32 buffers via an AsyncStream plus a raw-format stream.
+- `SystemAudioTap` - **stubbed** in phase 8. Real implementation needs `CATapDescription` + `AudioHardwareCreateProcessTap` (macOS 14.2+) plus aggregate-device wiring, which is large scope. The stub throws `.unavailable` so `AudioService` falls back to mic-only. Meeting transcripts come from mic audio only for now.
+- `WhisperTranscriber` - wraps WhisperKit (`tiny.en` on Neural Engine). 5s rolling windows with 50% overlap. First launch downloads the model (~80MB) from HuggingFace. Graceful fallback: `#if canImport(WhisperKit)` means the rest of the pipeline still builds and runs if the SPM dep fails to resolve.
+- `WakeWordService` - `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true` matching the phrase `"hey providence"`. Not as efficient as Porcupine, but no vendored framework. Porcupine is the phase 10 upgrade path.
+- `TTSService` - `AVSpeechSynthesizer` wrapper, disabled by default.
+- Meeting mode: `ActivityClassifier` receives `audioActive` from `AppState`; when activity flips to `.meeting`, `CaptureService` sets `state.meetingMode = true` and calls `scheduler.markMeetingDetected()`. Meeting ending reverses both.
+- `TranscriptView` - visible in `PanelRootView` only when `meetingMode && transcript != ""`. Shows last ~600 chars of rolling transcript.
+- PTT hotkey: `Cmd+Option+Space` opens a 10s transcription window. A second press closes it early. On close, whatever Whisper has is sent as `user_query` with `source: "push_to_talk"`. (`Fn`-only would require IOKit HID event taps, deferred.)
+
+Simplifications taken:
+
+- `SystemAudioTap` stubbed - mic-only pipeline ships.
+- Porcupine replaced with `SFSpeechRecognizer` on-device match.
+- PTT is tap-based (not held), since `Fn` key needs IOKit HID.
+
+Deferred (phase 8):
+
+- Real system audio tap via `CATapDescription`
+- Porcupine wake-word model
+- Runtime menu-bar toggles (TTS on/off, wake-word disable)
 
 ## Directory layout
 

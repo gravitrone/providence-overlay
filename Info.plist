@@ -18,5 +18,7 @@
     <string>Providence reads UI accessibility data for context awareness.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Providence listens for the wake phrase and meeting audio.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Providence uses on-device speech recognition to detect the "Hey Providence" wake phrase and push-to-talk commands.</string>
 </dict>
 </plist>

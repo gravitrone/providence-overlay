@@ -6,6 +6,7 @@ struct PanelRootView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ContextIndicatorView()
+            TranscriptView()
             SuggestionStreamView()
             Spacer()
             StatusFooterView()

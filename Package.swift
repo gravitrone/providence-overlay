@@ -8,10 +8,16 @@ let package = Package(
         .executable(name: "providence-overlay", targets: ["ProvidenceOverlay"]),
         .library(name: "ProvidenceOverlayCore", targets: ["ProvidenceOverlayCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
+    ],
     targets: [
         .executableTarget(
             name: "ProvidenceOverlay",
-            dependencies: ["ProvidenceOverlayCore"],
+            dependencies: [
+                "ProvidenceOverlayCore",
+                .product(name: "WhisperKit", package: "WhisperKit"),
+            ],
             path: "Sources/ProvidenceOverlay",
             resources: []
         ),
